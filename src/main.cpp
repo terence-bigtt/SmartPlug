@@ -13,12 +13,13 @@
 #include <sstream>
 
 #define SWITCH_PIN 5
-#define APMODE_PIN 0
-#define CLIMODE_PIN 2
+#define APMODE_PIN 2
+#define CLIMODE_PIN 0
 #define MANUAL_PIN 4
 
 #define SWITCH_ON 0
 #define SWITCH_OFF 1
+#define HEARTBEAT 30000
 
 #define MQTT_CLIENT_ID "ESP-001"
 #define SWITCH_ACTION_TOPIC "switch/carport/light/control"
@@ -26,7 +27,7 @@
 #define SERIAL_BAUD 115200
 
 bool saveNewConfig = false;
-
+unsigned long lastBeat = 0;
 void mqttCallbackHandler(char *topic, byte *payload, unsigned int length);
 
 ConfigButton configButton(MANUAL_PIN, HIGH);
@@ -125,12 +126,26 @@ void switchToggle(){
 void switchOn(){
 	log("Switching on");
 	digitalWrite(SWITCH_PIN, LOW);
-  digitalWrite(2,HIGH);
 }
 void switchOff(){
 	log("Switching off");
 	digitalWrite(SWITCH_PIN, HIGH);
-  digitalWrite(2,LOW);
+}
+
+void beat(){
+  unsigned long now = millis();
+
+  if (lastBeat - now > HEARTBEAT){
+    if (mqtt.connected()){
+      char buf[100];
+      sprintf(buf, "%lu:Heartbeat in %d", now, HEARTBEAT/1000);
+      std::string msg = std::string(buf);
+      mqtt.publish(SWITCH_STATUS_TOPIC, msg.c_str(), true);
+      free(buf);
+    }
+    lastBeat = now;
+  }
+
 }
 
 bool configMqtt(){
@@ -172,12 +187,12 @@ void setup(){
   else{
     configMqtt();
   }
-
 }
 
 void loop()
 { int liveState= digitalRead(SWITCH_PIN);
   configButton.loop();
+  beat();
   if(mqtt.connected()){
     mqtt.loop();
 
