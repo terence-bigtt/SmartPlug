@@ -54,11 +54,21 @@ bool MqttConnect::connected(){
   client->connected();
 }
 bool MqttConnect::publish(string topic, string payload){
-  client->publish(topic.c_str(), payload.c_str());
+  if (connected()){
+    client->publish(topic.c_str(), payload.c_str());
+  }
+  else{
+    Serial.println("Cannot publish, not connected");
+  }
 }
 
 bool MqttConnect::publish(string topic, string payload, boolean retained){
-  client->publish(topic.c_str(), payload.c_str(), retained);
+  if (connected()){
+    client->publish(topic.c_str(), payload.c_str(), retained);
+  }
+  else{
+    Serial.println("Cannot publish, not connected");
+  }
 }
 
 bool MqttConnect::subscribe(MqttSubscription sub){
@@ -109,5 +119,12 @@ if (it!= _subscriptionMap.end()){
 }
 
 bool MqttConnect::loop(){
+if(connected()){
   client->loop();
+} else {
+  Serial.println("Trying to connect MQTT");
+  connect();
+  Serial.println("Finished trying to connect MQTT");
+}
+
 }

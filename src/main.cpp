@@ -9,6 +9,8 @@
 #include <PubSubClient.h>
 #include "Mqtt/MqttConf.h"
 #include "Mqtt/MqttConnect.h"
+
+#include "MDns/mDns.h"
 #include <string>
 #include <sstream>
 
@@ -32,7 +34,7 @@ unsigned long lastBeat = 0;
 ConfigButton configButton(MANUAL_PIN, HIGH);
 MqttConf mqttConf;
 MqttConnect mqtt(&mqttConf);
-
+MdnsResponder mdns;
 
 int _currentState= LOW;
 
@@ -42,6 +44,8 @@ char mqtt_id[10] ="ESP-01";
 
 char mqtt_user[20] = "terence";
 char mqtt_pwd[20] = "";
+
+char networkName[20]="eps_01";
 
 void saveConfigCallback(){
   saveNewConfig = true;
@@ -57,6 +61,7 @@ void saveConfig(){
   mqttConf.setId((std::string) mqtt_id);
   mqttConf.setUser((std::string) mqtt_user);
   mqttConf.setPassword((std::string) mqtt_pwd);
+  mdns.setName((std::string) networkName);
   if(mqttConf.writeConfig()){
     Serial.println("Saved config");
   }
@@ -84,11 +89,13 @@ void runConfigPortal(){
   WiFiManagerParameter id("id", "mqtt id", mqtt_id, 10);
   WiFiManagerParameter user("user", "mqtt user", mqtt_user, 20);
   WiFiManagerParameter pwd("password", "mqtt password", mqtt_pwd, 20);
+  WiFiManagerParameter mdnsName("password", "mqtt password", networkName, 20);
   wifiManager.addParameter(&server);
   wifiManager.addParameter(&port);
   wifiManager.addParameter(&id);
   wifiManager.addParameter(&user);
   wifiManager.addParameter(&pwd);
+  wifiManager.addParameter(&mdnsName);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   feedbackApMode();
   if (!wifiManager.startConfigPortal("OnDemandAP")) {
@@ -102,6 +109,7 @@ void runConfigPortal(){
     strcpy(mqtt_id, id.getValue());
     strcpy(mqtt_user, user.getValue());
     strcpy(mqtt_pwd, pwd.getValue());
+    strcpy(networkName, mdnsName.getValue());
     saveConfig();
   }
 }
@@ -176,6 +184,8 @@ void setup(){
   digitalWrite(APMODE_PIN, HIGH);
   digitalWrite(CLIMODE_PIN, HIGH);
 
+  mdns.setName((std::string) networkName);
+  mdns.setPort(80);
   configButton.setClickCallback(1, switchToggle);
   configButton.setClickCallback(5, restart);
   configButton.setPressCallback(1, runConfigPortal);
@@ -200,24 +210,24 @@ void setup(){
   else{
     configMqtt();
   }
+  mdns.server->on("/on",switchOn);
+  mdns.server->on("/off",switchOff);
+  mdns.server->on("/toggle", switchToggle);
+  mdns.server->on("/status", getSwitchStateAsString);
+  if (!mdns.setup()){
+    Serial.println("couldn't start mdns service");
+  }
 }
 
 void loop()
 { int liveState= digitalRead(SWITCH_PIN);
-  configButton.loop();
   beat();
-  if(mqtt.connected()){
-    mqtt.loop();
-
-		if(liveState != _currentState) {
-      Serial.println("State changed");
-			mqtt.publish(SWITCH_STATUS_TOPIC, getSwitchStateAsString().c_str(), true);
-			_currentState = liveState;
-    }
-  } else {
-    Serial.println("Trying to connect MQTT");
-    mqtt.connect();
-    Serial.println("Finished trying to connect MQTT");
+  configButton.loop();
+  mdns.loop();
+  mqtt.loop();
+	if(liveState != _currentState) {
+    Serial.println("State changed");
+		mqtt.publish(SWITCH_STATUS_TOPIC, getSwitchStateAsString().c_str(), true);
+		_currentState = liveState;
   }
-
 }
