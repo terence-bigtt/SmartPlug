@@ -28,7 +28,6 @@
 
 bool saveNewConfig = false;
 unsigned long lastBeat = 0;
-void mqttCallbackHandler(char *topic, byte *payload, unsigned int length);
 
 ConfigButton configButton(MANUAL_PIN, HIGH);
 MqttConf mqttConf;
@@ -148,8 +147,22 @@ void beat(){
 
 }
 
+void mqttSwitchTopicHandler(string payload){
+  Serial.print("Received message ");
+
+    if(payload == "on"){
+        switchOn();
+    }
+    if(payload == "off"){
+        switchOff();
+    }
+    if(payload == "restart"){
+        restart();
+    }
+}
+
 bool configMqtt(){
-  mqtt.subscribe(SWITCH_ACTION_TOPIC);
+  mqtt.subscribe((string) SWITCH_ACTION_TOPIC, mqttSwitchTopicHandler);
   Serial.println("Subscribed to Action Topic");
   mqtt.publish(SWITCH_STATUS_TOPIC, getSwitchStateAsString().c_str(), true);
 }
@@ -181,7 +194,7 @@ void setup(){
     ESP.reset();
   };
   feedbackStaMode();
-  if (!mqtt.connect(mqttCallbackHandler)){
+  if (!mqtt.connect()){
     Serial.println("couldn't connect to MQTT server.");
   }
   else{
@@ -207,33 +220,4 @@ void loop()
     Serial.println("Finished trying to connect MQTT");
   }
 
-}
-
-void mqttCallbackHandler(char *topic, byte *payload, unsigned int length){
-  Serial.print("Receied message ");
-
-  char * payloadStr = (char *) malloc((length)*sizeof(char));
-  int i;
-  for (i=0;i<length;i=i+1){
-    payloadStr[i] = payload[i];
-  }
-  payloadStr[length]='\0';
-  Serial.print("Receied message ");
-  Serial.print(((std::string) payloadStr).c_str());
-  Serial.print(" on topic ");
-  Serial.println(((std::string) topic).c_str());
-
-
-	if(strcmp(topic, SWITCH_ACTION_TOPIC) == 0) {
-    if(strcmp(payloadStr, "on")==0){
-        switchOn();
-    }
-    if(strcmp(payloadStr, "off")==0){
-        switchOff();
-    }
-    if(strcmp(payloadStr, "restart")==0){
-        restart();
-    }
-  }
-  free(payloadStr);
 }

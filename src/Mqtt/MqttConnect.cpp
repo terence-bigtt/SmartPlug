@@ -1,4 +1,5 @@
 #include "MqttConnect.h"
+MqttConnect *globalMqttConnect = nullptr;
 
 MqttConnect::MqttConnect(){
   initialize();
@@ -15,6 +16,7 @@ MqttConnect::~MqttConnect(){
 
 void MqttConnect::initialize(){
   client = new PubSubClient(espClient);
+  globalMqttConnect = this;
 }
 
 void MqttConnect::setConfig(MqttConf * p_conf){
@@ -33,7 +35,7 @@ bool MqttConnect::connect(){
   if(id.length()==0){
     id = "ESP";
   }
-  client->setCallback(_callback);
+  client->setCallback(mqttCallback);
   Serial.println("will attempt connection.");
   Serial.println(user.c_str());
 
@@ -48,11 +50,6 @@ bool MqttConnect::connect(){
   return connected;
 }
 
-bool MqttConnect::connect(void (*callback)(char* topic, byte* payload, unsigned int length)){
-  setCallback(*callback);
-  return connect();
-}
-
 bool MqttConnect::connected(){
   client->connected();
 }
@@ -64,27 +61,53 @@ bool MqttConnect::publish(string topic, string payload, boolean retained){
   client->publish(topic.c_str(), payload.c_str(), retained);
 }
 
-bool MqttConnect::subscribe(string topic){
-
-  if(client->subscribe(topic.c_str())){
-    Serial.print("Subscribed to ");
-    Serial.println(topic.c_str());
+bool MqttConnect::subscribe(MqttSubscription sub){
+  if (sub.qos >=0){
+    return client->subscribe(sub.topic.c_str(), sub.qos);
   }
-  else {
-    Serial.println("Couldn't subscribe");
+  else{
+    return client->subscribe(sub.topic.c_str());
   }
-
+  _subscriptionMap.insert(std::make_pair(sub.topic, sub));
 }
 
-bool MqttConnect::subscribe(string topic, uint8_t qos){
-  client->subscribe(topic.c_str(), qos);
+bool MqttConnect::subscribe(string topic,void (* callback)(string)){
+  MqttSubscription mqttSub;
+  mqttSub.topic = topic;
+  mqttSub.callback  = callback;
+  subscribe(mqttSub);
 }
+
+void MqttConnect::mqttCallback(char* topic, byte* payload, unsigned int length){
+  char * payloadChar = (char *) malloc((length)*sizeof(char));
+  int i;
+  for (i=0;i<length;i=i+1){
+    payloadChar[i] = payload[i];
+  }
+  payloadChar[length]='\0';
+
+  free(payload);
+  string topicString = topic;
+
+  if(globalMqttConnect->_subscriptionMap.find(topicString) != globalMqttConnect->_subscriptionMap.end()){
+    Serial.print("Callback for topic ");
+    Serial.println(topicString.c_str());
+    globalMqttConnect->_subscriptionMap[topicString].callback((string) payloadChar);
+  } else{
+    Serial.print("Didn't callback for topic ");
+    Serial.println(topicString.c_str());
+  }
+}
+
 bool MqttConnect::unsubscribe(string topic){
+std::map<string, MqttSubscription>::iterator it;
+it = _subscriptionMap.find(topic);
+if (it!= _subscriptionMap.end()){
+  _subscriptionMap.erase(it);
+}
   client->unsubscribe(topic.c_str());
 }
+
 bool MqttConnect::loop(){
   client->loop();
-}
-void MqttConnect::setCallback(void (* callback)(char* topic, byte* payload, unsigned int length) ){
-  _callback = callback;
 }

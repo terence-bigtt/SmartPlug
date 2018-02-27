@@ -5,12 +5,18 @@
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include <string>
+#include <map>
 #include <new>
 
 using namespace std;
 
 class MqttConnect{
 public:
+  struct MqttSubscription{
+      string topic;
+      void (*callback)(string);// callback(payload)
+      uint8_t qos = -1;
+  };
   MqttConnect();
   MqttConnect(MqttConf * p_conf);
   ~MqttConnect();
@@ -19,18 +25,19 @@ public:
   bool connected();
   bool publish(string topic, string payload);
   bool publish(string topic, string payload, boolean retained);
-  bool subscribe(string topic);
-  bool subscribe(string topic, uint8_t qos);
+
+  bool subscribe(MqttSubscription sub);
+  bool subscribe(string topic, void (* callback)(string));
+
   bool unsubscribe(string topic);
   bool loop();
-  bool connect(void (* callback)(char* topic, byte* payload, unsigned int length) );
-  void setCallback(void (* callback)(char* topic, byte* payload, unsigned int length) );
   PubSubClient *client;
 
 private:
+  std::map<string, MqttSubscription> _subscriptionMap;
   WiFiClient espClient;
   MqttConf * _conf;
-  void (* _callback)(char* topic, byte* payload, unsigned int length) =NULL;
+  static void mqttCallback(char* topic, byte* payload, unsigned int length);
   void initialize();
 };
 #endif
