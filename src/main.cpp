@@ -9,8 +9,10 @@
 #include <PubSubClient.h>
 #include "Mqtt/MqttConf.h"
 #include "Mqtt/MqttConnect.h"
+#include <ESP8266mDNS.h>
 
-#include "MDns/mDns.h"
+
+//#include "MDns/mDns.h"
 #include <string>
 #include <sstream>
 
@@ -34,7 +36,7 @@ unsigned long lastBeat = 0;
 ConfigButton configButton(MANUAL_PIN, HIGH);
 MqttConf mqttConf;
 MqttConnect mqtt(&mqttConf);
-MdnsResponder mdns;
+ESP8266WebServer webServer(80);
 
 int _currentState= LOW;
 
@@ -45,7 +47,7 @@ char mqtt_id[10] ="ESP-01";
 char mqtt_user[20] = "terence";
 char mqtt_pwd[20] = "";
 
-char networkName[20]="eps_01";
+char networkName[20]="esp_01";
 
 void saveConfigCallback(){
   saveNewConfig = true;
@@ -61,7 +63,7 @@ void saveConfig(){
   mqttConf.setId((std::string) mqtt_id);
   mqttConf.setUser((std::string) mqtt_user);
   mqttConf.setPassword((std::string) mqtt_pwd);
-  mdns.setName((std::string) networkName);
+  //mdns.setName((std::string) networkName);
   if(mqttConf.writeConfig()){
     Serial.println("Saved config");
   }
@@ -142,13 +144,13 @@ void switchOff(){
 void beat(){
   unsigned long now = millis();
 
-  if (lastBeat - now > HEARTBEAT){
+  if (now-lastBeat > HEARTBEAT){
     if (mqtt.connected()){
       char buf[100];
       sprintf(buf, "%lu:Heartbeat in %d", now, HEARTBEAT/1000);
+      Serial.println("Heartbeat");
       std::string msg = std::string(buf);
       mqtt.publish(SWITCH_STATUS_TOPIC, msg.c_str(), true);
-      free(buf);
     }
     lastBeat = now;
   }
@@ -184,8 +186,7 @@ void setup(){
   digitalWrite(APMODE_PIN, HIGH);
   digitalWrite(CLIMODE_PIN, HIGH);
 
-  mdns.setName((std::string) networkName);
-  mdns.setPort(80);
+
   configButton.setClickCallback(1, switchToggle);
   configButton.setClickCallback(5, restart);
   configButton.setPressCallback(1, runConfigPortal);
@@ -210,20 +211,30 @@ void setup(){
   else{
     configMqtt();
   }
-  mdns.server->on("/on",switchOn);
-  mdns.server->on("/off",switchOff);
-  mdns.server->on("/toggle", switchToggle);
-  mdns.server->on("/status", getSwitchStateAsString);
-  if (!mdns.setup()){
-    Serial.println("couldn't start mdns service");
+  if(MDNS.begin(((std::string) networkName).c_str())){
+    Serial.println("MDNS responder started");
+    MDNS.addService("esp", "http", 80);
   }
+  Serial.println("Setting up server for /on.");
+  webServer.on("/on",[](){switchOn(); webServer.send(200, "text/plain", getSwitchStateAsString().c_str());});
+  Serial.println("Setting up server for /off.");
+  webServer.on("/off",[](){switchOff(); webServer.send(200, "text/plain", getSwitchStateAsString().c_str());});
+  webServer.begin();
+  Serial.println("HTTP server started");
+  Serial.println("Setting up server for /toggle.");
+  webServer.on("/toggle",[](){switchToggle(); webServer.send(200, "text/plain", getSwitchStateAsString().c_str());});
+  Serial.println("Setting up server for /status.");
+  webServer.on("/status",[](){webServer.send(200, "text/plain", getSwitchStateAsString().c_str());});
+  Serial.println("Server set up done");
+
+
 }
 
 void loop()
 { int liveState= digitalRead(SWITCH_PIN);
   beat();
   configButton.loop();
-  mdns.loop();
+  webServer.handleClient();
   mqtt.loop();
 	if(liveState != _currentState) {
     Serial.println("State changed");
