@@ -141,22 +141,6 @@ void switchOff(){
 	digitalWrite(SWITCH_PIN, HIGH);
 }
 
-void beat(){
-  unsigned long now = millis();
-
-  if (now-lastBeat > HEARTBEAT){
-    if (mqtt.connected()){
-      char buf[100];
-      sprintf(buf, "%lu:Heartbeat in %d", now, HEARTBEAT/1000);
-      Serial.println("Heartbeat");
-      std::string msg = std::string(buf);
-      mqtt.publish(SWITCH_STATUS_TOPIC, msg.c_str(), true);
-    }
-    lastBeat = now;
-  }
-
-}
-
 void mqttSwitchTopicHandler(string payload){
   Serial.print("Received message ");
 
@@ -232,7 +216,6 @@ void setup(){
 
 void loop()
 { int liveState= digitalRead(SWITCH_PIN);
-  beat();
   configButton.loop();
   webServer.handleClient();
   mqtt.loop();
