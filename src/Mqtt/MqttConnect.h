@@ -26,10 +26,16 @@ public:
   bool connect(void (* callback)(char* topic, byte* payload, unsigned int length) );
   void setCallback(void (* callback)(char* topic, byte* payload, unsigned int length) );
   PubSubClient *client;
+  void heartBeat();
+  void setBeatInterval(int interval);
+  void setHeartBeatTopic(string topic);
 
 private:
   WiFiClient espClient;
   MqttConf * _conf;
+  int _beatInterval = 30000;
+  long _lastBeat = 0;
+  string _heartBeatTopic= "/heartbeat";
   void (* _callback)(char* topic, byte* payload, unsigned int length) =NULL;
   void initialize();
 };

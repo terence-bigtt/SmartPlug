@@ -84,7 +84,32 @@ bool MqttConnect::unsubscribe(string topic){
 }
 bool MqttConnect::loop(){
   client->loop();
+  heartBeat();
 }
+
 void MqttConnect::setCallback(void (* callback)(char* topic, byte* payload, unsigned int length) ){
   _callback = callback;
+}
+
+void MqttConnect::setHeartBeatTopic(string topic){
+  _heartBeatTopic = topic;
+}
+
+void MqttConnect::heartBeat(){
+  long now = millis();
+
+  if (now-_lastBeat>_beatInterval){
+    _lastBeat = now;
+    char buf[50];
+    sprintf(buf, "HeartBeat - ESP%d - %ul", ESP.getChipId(), now);
+    string beatMsg = (string) buf;
+    Serial.println(beatMsg.c_str());
+    if (client->connected()){
+      client->publish(_heartBeatTopic.c_str(), beatMsg.c_str());
+    }
+  }
+}
+
+void MqttConnect::setBeatInterval(int interval){
+
 }

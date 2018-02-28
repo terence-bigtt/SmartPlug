@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <algorithm>    // std::copy
 #include <string> //std::string
+
 #define MQTT_CONFIG_FILE "/mqtt.json"
 
 class MqttConf{
